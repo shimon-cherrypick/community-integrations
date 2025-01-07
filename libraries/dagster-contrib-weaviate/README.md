@@ -3,6 +3,9 @@
 A dagster module that provides integration with [Weaviate](https://weaviate.io/)
 (both Cloud and Self-Hosted Weaviate instances).
 
+This module provides the `WeaviateLocalResource` and the `WeaviateCloudResource` for integration 
+with a self-hosted or WeaviateCloud instance, respectively.
+
 ## Installation
 
 The `dagster_contrib_weaviate` module is available as a PyPI package - install with your preferred python 
@@ -19,24 +22,17 @@ uv pip install dagster_contrib_weaviate
 
 ```python
 from dagster import Definitions, asset
-from dagster_contrib_weaviate import WeaviateResource, LocalConfig
+from dagster_contrib_weaviate import WeaviateLocalResource
 
 @asset
-def my_table(weaviate: WeaviateResource):
+def my_table(weaviate: WeaviateLocalResource):
     with weaviate.get_client() as weaviate_client:
         questions = weaviate_client.collections.get("Question")
         questions.query.near_text(query="biology", limit=2)
 
 defs = Definitions(
     assets=[my_table],
-    resources={
-        "weaviate": WeaviateResource(
-            connection_config=LocalConfig(
-                host="192.168.0.10", 
-                port=8080, 
-            )
-        ),
-    },
+    resources={"weaviate": WeaviateLocalResource(host="192.168.0.10")}
 )
 ```
 
@@ -47,10 +43,10 @@ Based on the [Weaviate Cloud Quickstart Guide](https://weaviate.io/developers/wc
 
 ```python
 from dagster import Definitions, asset
-from dagster_contrib_weaviate import WeaviateResource, CloudConfig
+from dagster_contrib_weaviate import WeaviateCloudResource
 
 @asset
-def my_table(weaviate: WeaviateResource):
+def my_table(weaviate: WeaviateCloudResource):
     with weaviate.get_client() as weaviate_client:
         questions = weaviate_client.collections.get("Question")
         questions.query.near_text(query="biology", limit=2)
@@ -58,10 +54,8 @@ def my_table(weaviate: WeaviateResource):
 defs = Definitions(
     assets=[my_table],
     resources={
-        "weaviate": WeaviateResource(
-            connection_config=CloudConfig(
-                cluster_url=wcd_url
-            ),
+        "weaviate": WeaviateCloudResource(
+            cluster_url=wcd_url,
             auth_credentials={
                 "api_key": wcd_apikey
             },
@@ -72,6 +66,7 @@ defs = Definitions(
     },
 )
 ```
+
 
 
 ## Development
