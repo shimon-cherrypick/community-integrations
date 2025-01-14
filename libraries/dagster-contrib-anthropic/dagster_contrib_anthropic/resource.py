@@ -156,20 +156,8 @@ class AnthropicResource(ConfigurableResource):
                 )
                 from dagster_contrib_anthropic import AnthropicResource
 
-
-                @op
-                def anthropic_op(context: OpExecutionContext, anthropic: AnthropicResource):
-                    with anthropic.get_client(context) as client:
-                        response = client.messages.create(
-                            model="claude-3-5-sonnet-20241022",
-                            max_tokens=1024,
-                            messages=[{"role": "user", "content": "Write a sentence on cats"}]
-                        )
-
-
-                anthropic_op_job = GraphDefinition(name="anthropic_op_job", node_defs=[anthropic_op]).to_job()
-
-
+                # This is an asset using the Anthropic resource - usage stats will be logged to
+                #  the asset metadata.
                 @asset(compute_kind="anthropic")
                 def anthropic_asset(context: AssetExecutionContext, anthropic: AnthropicResource):
                     with anthropic.get_client(context) as client:
@@ -179,8 +167,19 @@ class AnthropicResource(ConfigurableResource):
                             messages=[{"role": "user", "content": "Write a sentence on hats"}]
                         )
 
-
                 anthropic_asset_job = define_asset_job(name="anthropic_asset_job", selection="anthropic_asset")
+
+                # This is an op using the Anthropic resource - usage stats will not be automatically logged.
+                @op
+                def anthropic_op(context: OpExecutionContext, anthropic: AnthropicResource):
+                    with anthropic.get_client(context) as client:
+                        response = client.messages.create(
+                            model="claude-3-5-sonnet-20241022",
+                            max_tokens=1024,
+                            messages=[{"role": "user", "content": "Write a sentence on cats"}]
+                        )
+
+                anthropic_op_job = GraphDefinition(name="anthropic_op_job", node_defs=[anthropic_op]).to_job()
 
                 defs = Definitions(
                     assets=[anthropic_asset],

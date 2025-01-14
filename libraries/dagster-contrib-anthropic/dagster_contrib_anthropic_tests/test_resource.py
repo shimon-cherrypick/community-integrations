@@ -15,6 +15,7 @@ from dagster import (
     materialize_to_memory,
     multi_asset,
     op,
+    job,
 )
 from dagster._core.errors import DagsterInvariantViolationError
 from dagster._core.execution.context.init import build_init_resource_context
@@ -194,11 +195,16 @@ def test_anthropic_resource_with_multi_asset(mock_client, mock_context, mock_wra
 def test_anthropic_resource_with_partitioned_asset(
     mock_client, mock_context, mock_wrapper
 ):
-    anthropic_partitions_def = StaticPartitionsDefinition([str(j) for j in range(5)])
+    NUM_PARTITION_KEYS = 4
+    NUM_ASSET_DEFS = 5
+
+    anthropic_partitions_def = StaticPartitionsDefinition(
+        [str(j) for j in range(NUM_PARTITION_KEYS)]
+    )
 
     anthropic_partitioned_assets = []
 
-    for i in range(5):
+    for i in range(NUM_ASSET_DEFS):
 
         @asset(
             name=f"anthropic_partitioned_asset_{i}",
@@ -332,7 +338,7 @@ def test_anthropic_wrapper_with_graph_backed_asset(mock_client, mock_context):
             client.messages.create(
                 model=model_version,
                 max_tokens=1024,
-                messages=[{"role": "user", "content": "Say this is a test"}],
+                messages=[message],
             )
 
             mock_context.add_output_metadata.assert_called_with(
@@ -355,6 +361,45 @@ def test_anthropic_wrapper_with_graph_backed_asset(mock_client, mock_context):
         resources={"anthropic_resource": AnthropicResource(api_key=API_KEY)},
     )
 
+    assert result.success
+
+
+# Test that usage metadata is not logged in an op context
+@patch("dagster.OpExecutionContext", autospec=OpExecutionContext)
+@patch("dagster_contrib_anthropic.resource.Anthropic")
+def test_anthropic_wrapper_with_op(mock_client, mock_context):
+    @op
+    def anthropic_op(anthropic_resource: AnthropicResource):
+        mock_message = MagicMock()
+        mock_usage = MagicMock()
+
+        mock_usage.input_tokens = 1
+        mock_usage.output_tokens = 1
+        mock_usage.cache_creation_input_tokens = None
+        mock_usage.cache_read_input_tokens = None
+
+        mock_message.usage = mock_usage
+        mock_client.return_value.messages.create.return_value = mock_message
+
+        with anthropic_resource.get_client(context=mock_context) as client:
+            client.messages.create(
+                model=MODEL,
+                max_tokens=1024,
+                messages=[{"role": "user", "content": "Say this is a test"}],
+            )
+
+            assert not mock_context.add_output_metadata.called
+
+    @job
+    def anthropic_job():
+        anthropic_op()
+
+    defs = Definitions(
+        jobs=[anthropic_job],
+        resources={"anthropic_resource": AnthropicResource(api_key=API_KEY)},
+    )
+
+    result = defs.get_job_def("anthropic_job").execute_in_process()
     assert result.success
 
 
@@ -413,11 +458,16 @@ def test_anthropic_wrapper_with_multi_asset(mock_client, mock_context):
 
 @patch("dagster_contrib_anthropic.resource.Anthropic")
 def test_anthropic_wrapper_with_partitioned_asset(mock_client):
-    anthropic_partitions_def = StaticPartitionsDefinition([str(j) for j in range(5)])
+    NUM_PARTITION_KEYS = 4
+    NUM_ASSET_DEFS = 5
+
+    anthropic_partitions_def = StaticPartitionsDefinition(
+        [str(j) for j in range(NUM_PARTITION_KEYS)]
+    )
 
     anthropic_partitioned_assets = []
 
-    for i in range(5):
+    for i in range(NUM_ASSET_DEFS):
 
         @asset(
             name=f"anthropic_partitioned_asset_{i}",
