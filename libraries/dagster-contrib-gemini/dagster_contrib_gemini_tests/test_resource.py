@@ -15,6 +15,7 @@ from dagster import (
     materialize_to_memory,
     multi_asset,
     op,
+    job,
 )
 from dagster._core.errors import DagsterInvariantViolationError
 from dagster._core.execution.context.init import build_init_resource_context
@@ -172,11 +173,16 @@ def test_gemini_resource_with_multi_asset(
 def test_gemini_resource_with_partitioned_asset(
     mock_configure, mock_model, mock_context, mock_wrapper
 ):
-    gemini_partitions_def = StaticPartitionsDefinition([str(j) for j in range(5)])
+    NUM_PARTITION_KEYS = 4
+    NUM_ASSET_DEFS = 5
+
+    gemini_partitions_def = StaticPartitionsDefinition(
+        [str(j) for j in range(NUM_PARTITION_KEYS)]
+    )
 
     gemini_partitioned_assets = []
 
-    for i in range(5):
+    for i in range(NUM_ASSET_DEFS):
 
         @asset(
             name=f"gemini_partitioned_asset_{i}",
@@ -336,6 +342,52 @@ def test_gemini_wrapper_with_graph_backed_asset(
     assert result.success
 
 
+# Test that usage metadata is not logged in an op context
+@patch("dagster.OpExecutionContext", autospec=OpExecutionContext)
+@patch("dagster_contrib_gemini.resource.GenerativeModel")
+@patch("dagster_contrib_gemini.resource.genai.configure")
+def test_gemini_wrapper_with_op(mock_configure, mock_model, mock_context):
+    @op
+    def gemini_op(gemini_resource: GeminiResource):
+        mock_context.assets_def.keys_by_output_name.keys.return_value = [
+            AssetKey("gemini_op"),
+        ]
+        mock_context.asset_key = AssetKey("gemini_op")
+        mock_context.output_for_asset_key.return_value = "gemini_op"
+
+        mock_response = MagicMock()
+        mock_usage = MagicMock()
+
+        mock_usage.cached_content_token_count = 0
+        mock_usage.prompt_token_count = 1
+        mock_usage.candidates_token_count = 1
+        mock_usage.total_token_count = 2
+
+        mock_response.usage_metadata = mock_usage
+        mock_model.return_value.generate_content.return_value = mock_response
+
+        with gemini_resource.get_model(context=mock_context) as model:
+            model.generate_content("Say this is a test")
+
+            assert not mock_context.add_output_metadata.called
+
+    @job
+    def gemini_job():
+        gemini_op()
+
+    defs = Definitions(
+        jobs=[gemini_job],
+        resources={
+            "gemini_resource": GeminiResource(
+                api_key=API_KEY, generative_model_name=MODEL_NAME
+            )
+        },
+    )
+
+    result = defs.get_job_def("gemini_job").execute_in_process()
+    assert result.success
+
+
 @patch("dagster.AssetExecutionContext", autospec=AssetExecutionContext)
 @patch("dagster_contrib_gemini.resource.GenerativeModel")
 @patch("dagster_contrib_gemini.resource.genai.configure")
@@ -393,11 +445,16 @@ def test_gemini_wrapper_with_multi_asset(mock_configure, mock_model, mock_contex
 @patch("dagster_contrib_gemini.resource.GenerativeModel")
 @patch("dagster_contrib_gemini.resource.genai.configure")
 def test_gemini_wrapper_with_partitioned_asset(mock_configure, mock_model):
-    gemini_partitions_def = StaticPartitionsDefinition([str(j) for j in range(5)])
+    NUM_PARTITION_KEYS = 4
+    NUM_ASSET_DEFS = 5
+
+    gemini_partitions_def = StaticPartitionsDefinition(
+        [str(j) for j in range(NUM_PARTITION_KEYS)]
+    )
 
     gemini_partitioned_assets = []
 
-    for i in range(5):
+    for i in range(NUM_ASSET_DEFS):
 
         @asset(
             name=f"gemini_partitioned_asset_{i}",

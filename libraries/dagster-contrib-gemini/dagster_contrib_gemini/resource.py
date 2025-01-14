@@ -182,18 +182,8 @@ class GeminiResource(ConfigurableResource):
                 )
                 from dagster_contrib_gemini import GeminiResource
 
-
-                @op
-                def gemini_op(context: OpExecutionContext, gemini: GeminiResource):
-                    with gemini.get_model(context) as model:
-                        response = model.generate_content(
-                            "Generate a short sentence on tests"
-                        )
-
-
-                gemini_op_job = GraphDefinition(name="gemini_op_job", node_defs=[gemini_op]).to_job()
-
-
+                # This is an asset using the Gemini resource - usage stats will be logged to
+                #  the asset metadata.
                 @asset(compute_kind="gemini")
                 def gemini_asset(context: AssetExecutionContext, gemini: GeminiResource):
                     with gemini.get_model(context) as model:
@@ -201,8 +191,17 @@ class GeminiResource(ConfigurableResource):
                             "Generate a short sentence on tests"
                         )
 
-
                 gemini_asset_job = define_asset_job(name="gemini_asset_job", selection="gemini_asset")
+
+                # This is an op using the Gemini resource - usage stats will not be logged.
+                @op
+                def gemini_op(context: OpExecutionContext, gemini: GeminiResource):
+                    with gemini.get_model(context) as model:
+                        response = model.generate_content(
+                            "Generate a short sentence on tests"
+                        )
+
+                gemini_op_job = GraphDefinition(name="gemini_op_job", node_defs=[gemini_op]).to_job()
 
                 defs = Definitions(
                     assets=[gemini_asset],
