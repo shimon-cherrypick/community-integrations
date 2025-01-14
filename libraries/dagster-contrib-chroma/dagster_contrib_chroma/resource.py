@@ -19,11 +19,11 @@ class ChromaResource(ConfigurableResource):
         .. code-block:: python
 
         from dagster import Definitions, asset
-        from dagster_contrib_chroma import ChromaResource, LocalConfig
+        from dagster_contrib_chroma import ChromaResource, LocalConfig, HttpConfig
 
         @asset
-        def my_table(chroma: ChromaResource):
-            with chroma.get_client() as chroma_client:
+        def my_table(chroma_local: ChromaResource):
+            with chroma_local.get_client() as chroma_client:
                 collection = chroma_client.get_collection("fruits")
 
                 results = collection.query(
@@ -34,29 +34,10 @@ class ChromaResource(ConfigurableResource):
         defs = Definitions(
             assets=[my_table],
             resources={
-                "chroma": ChromaResource(
+                "chroma_local": ChromaResource(
                     connection_config=LocalConfig(persistence_path="./chroma")
-                )
-            }
-        )
-
-        from dagster import Definitions, asset
-        from dagster_contrib_chroma import ChromaResource, HttpConfig
-
-        @asset
-        def my_table(chroma: ChromaResource):
-            with chroma.get_client() as chroma_client:
-                collection = chroma_client.get_collection("fruits")
-
-                results = collection.query(
-                    query_texts=["hawaii"],
-                    n_results=1,
-                )
-
-        defs = Definitions(
-            assets=[my_table],
-            resources={
-                "chroma": ChromaResource(
+                ),
+                "chroma_http": ChromaResource(
                     connection_config=HttpConfig(host="localhost", port=8000)
                 )
             }
