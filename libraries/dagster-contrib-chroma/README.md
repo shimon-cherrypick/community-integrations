@@ -18,12 +18,13 @@ uv pip install dagster_contrib_chroma
 (Based on the [Chroma getting started guide](https://docs.trychroma.com/docs/overview/getting-started))
 
 ```python
+import os
 from dagster import Definitions, asset
 from dagster_contrib_chroma import ChromaResource, LocalConfig, HttpConfig
 
 @asset
-def my_table(chroma_local: ChromaResource):
-    with chroma_local.get_client() as chroma_client:
+def my_table(chroma: ChromaResource):
+    with chroma.get_client() as chroma_client:
         collection = chroma_client.create_collection("fruits")
 
         collection.add(
@@ -43,12 +44,11 @@ def my_table(chroma_local: ChromaResource):
 defs = Definitions(
     assets=[my_table],
     resources={
-        "chroma_local": ChromaResource(
-            connection_config=LocalConfig(persistence_path="./chroma")
+        "chroma": ChromaResource(
+            connection_config=
+                LocalConfig(persistence_path="./chroma") if os.getenv("DEV") else 
+                    HttpConfig(host="192.168.0.10", port=8000)
         ),
-        "chroma_http": ChromaResource(
-            connection_config=HttpConfig(host="localhost", port=8000)
-        )
     }
 )
 ```
