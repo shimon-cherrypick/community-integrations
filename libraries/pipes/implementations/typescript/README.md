@@ -96,6 +96,7 @@ npm install && npm run build
 
 ```
 npm test
+uv run --all-extras pytest
 ```
 
 ### Linting

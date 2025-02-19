@@ -54,7 +54,7 @@ describe('openDagsterPipes', () => {
         expect(pipes.isClosed).toBe(true);
     });
 
-    test('test message flow is correct (opened, log, reportAsset, reportCheck, closed)', () => {
+    test('test message flow is correct (opened, log, reportCustomMessage, reportAsset, reportCheck, closed)', () => {
         const paramsLoader = {
             loadContextParams: jest.fn().mockReturnValue({"context_param": "param"}),
             loadMessagesParams: jest.fn().mockReturnValue({"messages_param": "param"}),
@@ -65,7 +65,7 @@ describe('openDagsterPipes', () => {
         };
         const messagesWriter = {
             open: jest.fn(),
-            writeMessage: jest.fn(),
+            writeMessage: jest.fn().mockImplementation((x) => console.log("***" + JSON.stringify(x))),
             close: jest.fn(),
             openedExtras: jest.fn().mockReturnValue(
                 {"extra_key": "extra_value"}
@@ -101,6 +101,16 @@ describe('openDagsterPipes', () => {
                 level: "WARNING"
             })
         }));
+
+        pipes.reportCustomMessage({"custom": 150})
+        expect(messagesWriter.writeMessage).toHaveBeenCalledWith(expect.objectContaining(
+            {
+                method: "report_custom_message",
+                params: expect.objectContaining(
+                    {"payload": {"custom": 150}}
+                )
+            }
+        ));
 
         pipes.reportAssetMaterialization({ key: "value" }, "v1");
         expect(messagesWriter.writeMessage).toHaveBeenCalledWith(expect.objectContaining({

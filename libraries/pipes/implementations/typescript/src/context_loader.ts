@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import { PipesContextData } from "./types";
-import { DagsterPipesError } from "./types";
+import { DagsterPipesError } from "./errors";
 
 /**
  * A context loader loads context data injected by the orchestration process.

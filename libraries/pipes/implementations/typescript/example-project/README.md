@@ -14,12 +14,6 @@ You can change the dependency to the latest `npm` release with `npm uninstall da
 # Compile the local (dev) version of dagster_pipes_typescript
 npm install .. && npm run build '-p ..'
 # Run dagster orchestration locally
-uv run --all-extras dagster dev
+uv run dagster dev
 ```
 
-## Testing
-
-```bash
-npm install .. && npm run build '-p ..'
-uv run --all-extras pytest
-```

@@ -1,3 +1,3 @@
 ruff:
-	-ruff check --fix .
+	ruff check --fix .
 	ruff format .

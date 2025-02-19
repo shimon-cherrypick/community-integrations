@@ -1,11 +1,10 @@
 import { PipesEnvParamsLoader, PipesParamsLoader } from "./params_loader";
 import { PipesContextLoader, PipesDefaultContextLoader } from "./context_loader";
-import { PipesDataProvenance, PipesException, PipesMessage, PipesPartitionKeyRange, PipesTimeWindow } from "./types";
-import { PipesContextData } from "./types";
+import { Method, PipesContextData, PipesMessage, ProvenanceByAssetKey, PartitionKeyRange, PartitionTimeWindow } from "./types";
 import { normalizeMetadata } from "./normalize_metadata";
 import { PipesDefaultMessageWriter, PipesMessageWriter } from "./message_writer";
 import { PipesLogger } from "./logger";
-import { DagsterPipesError } from "./types";
+import { DagsterPipesError, PipesException } from "./errors";
 
 export const PIPES_PROTOCOL_VERSION = "0.1"
 
@@ -150,6 +149,16 @@ export class PipesContext {
     }
 
     /**
+     * Send a JSON serializable payload back to the orchestration process. Can be retrieved there
+     * using `get_custom_messages`.
+     *
+     * @param payload - JSON serializable data.
+     */
+    public reportCustomMessage(payload: any): void {
+        // no-op
+    }
+
+    /**
      * Close the pipes connection. This will flush all buffered messages to the orchestration
      * process and cause any further attempt to write a message to raise an error. This method is
      * idempotent-- subsequent calls after the first have no effect.
@@ -181,14 +190,14 @@ export class PipesContext {
     /**
      * The provenance for the currently scoped asset. Raises an error if 0 or multiple assets are in scope.
      */
-    public get provenance(): PipesDataProvenance | null {
+    public get provenance(): ProvenanceByAssetKey | null {
         return null;
     }
 
     /**
      * Mapping of asset key to provenance for the currently scoped assets. Raises an error if no assets are in scope.
      */
-    public get provenanceByAssetKey(): Record<string, PipesDataProvenance | null> {
+    public get provenanceByAssetKey(): Record<string, ProvenanceByAssetKey | null> {
         return {};
     }
 
@@ -223,14 +232,14 @@ export class PipesContext {
     /**
      * The partition key range for the currently scoped partition or partitions. Raises an error if no partitions are in scope.
      */
-    public get partitionKeyRange(): PipesPartitionKeyRange {
+    public get partitionKeyRange(): PartitionKeyRange {
         return { start: "", end: "" };
     }
 
     /**
      * The partition time window for the currently scoped partition or partitions. Returns null if partitions in scope are not temporal. Raises an error if no partitions are in scope.
      */
-    public get partitionTimeWindow(): PipesTimeWindow | null {
+    public get partitionTimeWindow(): PartitionTimeWindow | null {
         return null;
     }
 
@@ -308,7 +317,7 @@ class PipesContextImpl extends PipesContext {
         this.messageWriter = messageWriter;
         this.messageWriter.open(decodedMessageParams)
 
-        this.writeMessage("opened", {
+        this.writeMessage(Method.Opened, {
             "extras": this.messageWriter.openedExtras()
         })
     }
@@ -337,7 +346,7 @@ class PipesContextImpl extends PipesContext {
             }
         }
         
-        this.writeMessage("closed", payload)
+        this.writeMessage(Method.Closed, payload)
         this.closed = true;
         this.messageWriter.close()
     }
@@ -352,7 +361,7 @@ class PipesContextImpl extends PipesContext {
     private resolveAssetKey(paramAssetKey: string | null) {
         const definedAssetKeys = this.contextData.asset_keys;
 
-        if (definedAssetKeys !== null) {
+        if (definedAssetKeys) {
             if (paramAssetKey) { // Make sure assetKey is one of the asset-keys defined in the context
                 if (!definedAssetKeys.includes(paramAssetKey)) {
                     throw new DagsterPipesError(
@@ -389,7 +398,7 @@ class PipesContextImpl extends PipesContext {
             metadata = normalizeMetadata(metadata);    
         }
 
-        this.writeMessage("report_asset_materialization", {
+        this.writeMessage(Method.ReportAssetMaterialization, {
             metadata: metadata,
             data_version: dataVersion,
             asset_key: assetKey
@@ -412,7 +421,7 @@ class PipesContextImpl extends PipesContext {
         }
 
         this.writeMessage(
-            "report_asset_check",
+            Method.ReportAssetCheck,
             {
                 "asset_key": assetKey,
                 "check_name": checkName,
@@ -425,12 +434,16 @@ class PipesContextImpl extends PipesContext {
     
     public log(message: string, level: string) {
         this.writeMessage(
-            "log",
+            Method.Log,
             {"message": message, "level": level}
         )
     }
 
-    private writeMessage(method: string, params: Record<string, any> = {}): void {
+    public reportCustomMessage(payload: any): void {
+        this.writeMessage(Method.ReportCustomMessage, {"payload": payload})
+    }
+
+    private writeMessage(method: Method, params: Record<string, any> = {}): void {
         if (this.closed) {
             throw new DagsterPipesError("cannot send message after PipesContext is closed")
         }
@@ -444,7 +457,7 @@ class PipesContextImpl extends PipesContext {
     }
     
     public get assetKey() {
-        if (this.contextData.asset_keys === null) {
+        if (!this.contextData.asset_keys) {
             throw Error("asset_key is unedfined. Current step does not target an asset.");
         }
         if (this.contextData.asset_keys.length != 1) {
@@ -454,68 +467,68 @@ class PipesContextImpl extends PipesContext {
     }
 
     public get assetKeys() {
-        if (this.contextData.asset_keys === null) {
+        if (!this.contextData.asset_keys) {
             throw Error("asset_keys is unedfined. Current step does not target an asset.");
         }
 
         return this.contextData.asset_keys;
     }
 
-    public get provenance(): PipesDataProvenance | null {
-        if (this.contextData.provenance_by_asset_key === null) {
+    public get provenance(): ProvenanceByAssetKey | null {
+        if (!this.contextData.provenance_by_asset_key) {
             throw Error("provenance is undefined. Current step does not target an asset.");
         }
-        if (this.contextData.asset_keys === null || this.contextData.asset_keys.length != 1) {
+        if (!this.contextData.asset_keys || this.contextData.asset_keys.length != 1) {
             throw Error("provenance is undefined. Current step targets multiple assets.");
         }
         return this.contextData.provenance_by_asset_key[this.contextData.asset_keys[0]];
     }
 
-    public get provenanceByAssetKey(): Record<string, PipesDataProvenance | null> {
-        if (this.contextData.provenance_by_asset_key === null) {
+    public get provenanceByAssetKey(): Record<string, ProvenanceByAssetKey | null> {
+        if (!this.contextData.provenance_by_asset_key) {
             throw Error("provenance_by_asset_key is undefined. Current step does not target an asset.");
         }
         return this.contextData.provenance_by_asset_key;
     }
 
     public get codeVersion(): string | null {
-        if (this.contextData.code_version_by_asset_key === null) {
+        if (!this.contextData.code_version_by_asset_key) {
             throw Error("code_version is undefined. Current step does not target an asset.");
         }
-        if (this.contextData.asset_keys === null || this.contextData.asset_keys.length != 1) {
+        if (!this.contextData.asset_keys || this.contextData.asset_keys.length != 1) {
             throw Error("code_version is undefined. Current step targets multiple assets or no asset.");
         }
         return this.contextData.code_version_by_asset_key[this.contextData.asset_keys[0]];
     }
 
     public get codeVersionByAssetKey(): Record<string, string | null> {
-        if (this.contextData.code_version_by_asset_key === null) {
+        if (!this.contextData.code_version_by_asset_key) {
             throw Error("code_version_by_asset_key is undefined. Current step does not target an asset.");
         }
         return this.contextData.code_version_by_asset_key;
     }
 
     public get isPartitionStep(): boolean {
-        return this.contextData.partition_key_range !== null;
+        return !!this.contextData.partition_key_range;
     }
 
     public get partitionKey(): string {
-        if (this.contextData.partition_key === null) {
+        if (!this.contextData.partition_key) {
             throw Error("partition_key is undefined. Current step does not target a partition.");
         }
         return this.contextData.partition_key;
     }
 
-    public get partitionKeyRange(): PipesPartitionKeyRange {
-        if (this.contextData.partition_key_range === null) {
-            throw Error("partition_key_range is undefined. Current step does not target a partition.");
+    public get partitionKeyRange(): PartitionKeyRange {
+        if (!this.contextData.partition_key_range) {
+            throw new DagsterPipesError("partition_key_range is undefined. Current step does not target a partition.");
         }
         return this.contextData.partition_key_range;
     }
 
-    public get partitionTimeWindow(): PipesTimeWindow | null {
-        if (this.contextData.partition_key_range === null) {
-            throw Error("partition_time_window is undefined. Current step does not target a partition.");
+    public get partitionTimeWindow(): PartitionTimeWindow | null {
+        if (!this.contextData.partition_time_window) {
+            throw new DagsterPipesError("partition_time_window is undefined. Current step does not target a partition.");
         }
         return this.contextData.partition_time_window;
     }
@@ -525,7 +538,10 @@ class PipesContextImpl extends PipesContext {
     }
 
     public get jobName(): string | null {
-        return this.contextData.job_name;
+        if (this.contextData.job_name) {
+            return this.contextData.job_name;
+        }
+        return null;
     }
 
     public get retryNumber(): number {
@@ -533,14 +549,17 @@ class PipesContextImpl extends PipesContext {
     }
 
     public getExtra(key: string): any {
+        if (!this.contextData.extras) {
+            throw new DagsterPipesError('extras are not defined')
+        }
         if (!(key in this.contextData.extras)) {
-            throw Error(`Extra with key ${key} is not defined.`);
+            throw new DagsterPipesError(`Extra with key ${key} is not defined.`);
         }
         return this.contextData.extras[key];
     }
 
     public get extras(): Record<string, any> {
-        return this.contextData.extras;
+        return this.contextData.extras || {};
     }
 
     public get isClosed(): boolean {

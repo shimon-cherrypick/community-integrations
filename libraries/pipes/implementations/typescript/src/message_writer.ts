@@ -1,4 +1,4 @@
-import { DagsterPipesError } from "./types"
+import { DagsterPipesError } from "./errors"
 import * as fs from "fs"
 import { PipesMessage } from "./types"
 

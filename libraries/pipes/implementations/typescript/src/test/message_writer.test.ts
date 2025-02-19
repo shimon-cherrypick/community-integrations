@@ -1,18 +1,19 @@
 import { PipesDefaultMessageWriter } from "../message_writer";
-import { DagsterPipesError, PipesMessage } from "../types";
+import { PipesMessage, Method } from "../types";
+import { DagsterPipesError  } from "../errors";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
 const message1: PipesMessage = {
     __dagster_pipes_version: "0.1",
-    method: "test_method",
+    method: Method.Log,
     params: { key: "value" }
 };
 
 const message2: PipesMessage = {
     __dagster_pipes_version: "0.1",
-    method: "test_method",
+    method: Method.Log,
     params: { key2: "value2" }
 };
 

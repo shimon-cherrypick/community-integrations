@@ -1,5 +1,6 @@
 import { PipesDefaultContextLoader } from "../context_loader";
-import { DagsterPipesError, PipesContextData } from "../types";
+import { DagsterPipesError } from "../errors";
+import { PipesContextData } from "../types";
 import * as fs from "fs";
 import * as path from "path"
 import * as os from 'os';
@@ -8,9 +9,6 @@ const contextData: PipesContextData = {
     asset_keys: ["asset1"],
     code_version_by_asset_key: { "asset1": "v1" },
     provenance_by_asset_key: { "asset1": null },
-    partition_key: null,
-    partition_key_range: null,
-    partition_time_window: null,
     run_id: "run123",
     job_name: "job1",
     retry_number: 0,

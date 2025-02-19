@@ -1,63 +1,99 @@
-export class DagsterPipesError extends Error {}
-
-/**
- * A message sent from the external process to the orchestration process.
- */
-export interface PipesMessage {
-    __dagster_pipes_version: string;
-    method: string;
-    params: Record<string, any>;
+export enum AssetCheckSeverity {
+    Error = "ERROR",
+    Warn = "WARN",
 }
 
 /**
- * A range of partition keys.
- */
-export interface PipesPartitionKeyRange {
-    start: string;
-    end: string;
-}
-
-/**
- * A span of time delimited by a start and end timestamp. This is defined for time-based partitioning schemes.
- */
-export interface PipesTimeWindow {
-    start: string; // timestamp
-    end: string; // timestamp
-}
-
-/**
- * Provenance information for an asset.
- */
-export interface PipesDataProvenance {
-    code_version: string;
-    input_data_versions: Record<string, string>;
-    is_user_provided: boolean;
-}
-
-/**
- * The serializable data passed from the orchestration process to the external process. This gets
- * wrapped in a `PipesContext`.
+ * The serializable data passed from the orchestration process to the external process. This
+ * gets wrapped in a PipesContext.
  */
 export interface PipesContextData {
-    asset_keys: string[] | null;
-    code_version_by_asset_key: Record<string, string | null> | null;
-    provenance_by_asset_key: Record<string, PipesDataProvenance | null> | null;
-    partition_key: string | null;
-    partition_key_range: PipesPartitionKeyRange | null;
-    partition_time_window: PipesTimeWindow | null;
-    run_id: string;
-    job_name: string | null;
-    retry_number: number;
-    extras: Record<string, any>;
+    asset_keys?:                string[];
+    code_version_by_asset_key?: { [key: string]: null | string };
+    extras:                     { [key: string]: any } | null;
+    job_name?:                  string;
+    partition_key?:             string;
+    partition_key_range?:       PartitionKeyRange;
+    partition_time_window?:     PartitionTimeWindow;
+    provenance_by_asset_key?:   { [key: string]: null | ProvenanceByAssetKey } | null;
+    retry_number:               number;
+    run_id:                     string;
+}
+
+export interface PartitionKeyRange {
+    end?:   string;
+    start?: string;
+    [property: string]: any;
+}
+
+export interface PartitionTimeWindow {
+    end?:   string;
+    start?: string;
+    [property: string]: any;
+}
+
+export interface ProvenanceByAssetKey {
+    code_version?:        string;
+    input_data_versions?: { [key: string]: string };
+    is_user_provided?:    boolean;
+    [property: string]: any;
+}
+
+export enum PipesLogLevel {
+    Critical = "CRITICAL",
+    Debug = "DEBUG",
+    Error = "ERROR",
+    Info = "INFO",
+    Warning = "WARNING",
+}
+
+export interface PipesMessage {
+    /**
+     * The version of the Dagster Pipes protocol
+     */
+    __dagster_pipes_version: string;
+    /**
+     * Event type
+     */
+    method: Method;
+    /**
+     * Event parameters
+     */
+    params: { [key: string]: any } | null;
 }
 
 /**
- * An exception that can be reported from the external process to the Dagster orchestration process.
+ * Event type
  */
-export interface PipesException {
-    message: string;
-    stack: string[];
-    name: string | null;
-    cause: PipesException | null;
-    context: PipesException | null;
+export enum Method {
+    Closed = "closed",
+    Log = "log",
+    Opened = "opened",
+    ReportAssetCheck = "report_asset_check",
+    ReportAssetMaterialization = "report_asset_materialization",
+    ReportCustomMessage = "report_custom_message",
+}
+
+export interface PipesMetadataValue {
+    raw_value?: any[] | boolean | number | number | { [key: string]: any } | null | string;
+    type?:      Type;
+    [property: string]: any;
+}
+
+export enum Type {
+    Asset = "asset",
+    Bool = "bool",
+    DagsterRun = "dagster_run",
+    Float = "float",
+    Infer = "__infer__",
+    Int = "int",
+    JSON = "json",
+    Job = "job",
+    Md = "md",
+    Notebook = "notebook",
+    Null = "null",
+    Path = "path",
+    Text = "text",
+    Timestamp = "timestamp",
+    URL = "url",
 }
