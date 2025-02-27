@@ -6,5 +6,5 @@ class TestJavaPipes(PipesTestSuite):
         "java",
         "-cp",
         "build/libs/dagster-pipes-java-1.0-SNAPSHOT.jar",
-        "pipes.MainTest",
+        "io.dagster.pipes.MainTest",
     ]
